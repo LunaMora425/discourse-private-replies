@@ -49,7 +49,6 @@ module ::DiscoursePrivateReplies
     Group.where("id in (?)", SiteSetting.private_replies_see_all_from_groups.split('|')).each do |g|
       userids += g.users.pluck(:id)
     end
-    userids = userids + [ topic.user.id ] if topic
     userids = userids + [ user.id ] if user && !user.anonymous? # anonymous users don't have the id method
     return userids.uniq
   end
@@ -71,7 +70,7 @@ after_initialize do
         return true if DiscoursePrivateReplies.can_see_all_posts?(@user, post.topic)
 
         userids = DiscoursePrivateReplies.can_see_post_if_author_among(@user, post.topic)
-        return false unless userids.include? post.user.id
+        return false unless post.post_number == 1 || userids.include?(post.user.id)
       end
 
       true
@@ -163,7 +162,7 @@ after_initialize do
         @results.posts.delete_if do |post|
           next false unless protected_topics.include? post.topic_id # leave unprotected topics alone
           next false if userids.include? post.user_id               # show staff and own posts
-          next false if post.user_id == post.topic.user_id          # show topic starter posts
+          next false if post.post_number == 1
           next false if @guardian.user.id == post.topic.user_id     # show all posts to topic owner
           true
         end
@@ -184,7 +183,7 @@ after_initialize do
           protected_topic_list = TopicCustomField.where(:name => 'private_replies').where(:value => true).pluck(:topic_id).join(',')
 
           if !protected_topic_list.empty?
-            builder.where("( (a.target_topic_id not in (#{protected_topic_list})) OR (a.acting_user_id = t.user_id) OR (a.acting_user_id in (#{userid_list})) )")
+            builder.where("( (a.target_topic_id not in (#{protected_topic_list})) OR (a.acting_user_id in (#{userid_list})) )")
           end
         end
         super(builder, user_id, guardian, ignore_private_messages)
