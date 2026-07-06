@@ -50,7 +50,6 @@ module ::DiscoursePrivateReplies
     Group.where("id in (?)", SiteSetting.private_replies_see_all_from_groups.split('|')).each do |g|
       userids += g.users.pluck(:id)
     end
-    userids = userids + [ topic.user.id ] if topic && user && !user.anonymous? && Post.exists?(topic_id: topic.id, user_id: user.id)
     userids = userids + [ user.id ] if user && !user.anonymous? # anonymous users don't have the id method
     return userids.uniq
   end
