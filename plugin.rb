@@ -20,6 +20,7 @@ module ::DiscoursePrivateReplies
 
     # topic owner can see all
     return true if topic && user.id == topic.user.id
+    return true if topic && Post.where(topic_id: topic.id, post_number: 1).first&.raw_mentions&.include?(user.username_lower)
 
     # topic participants can see all
     return true if SiteSetting.private_replies_participants_can_see_all && topic && Post.where(topic_id: topic.id, user_id: user.id).count > 0
@@ -49,6 +50,7 @@ module ::DiscoursePrivateReplies
     Group.where("id in (?)", SiteSetting.private_replies_see_all_from_groups.split('|')).each do |g|
       userids += g.users.pluck(:id)
     end
+    userids = userids + [ topic.user.id ] if topic && user && !user.anonymous? && Post.exists?(topic_id: topic.id, user_id: user.id)
     userids = userids + [ user.id ] if user && !user.anonymous? # anonymous users don't have the id method
     return userids.uniq
   end
