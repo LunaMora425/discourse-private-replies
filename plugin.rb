@@ -22,6 +22,7 @@ module ::DiscoursePrivateReplies
 
     # topic owner can see all
     return true if topic && user.id == topic.user.id
+    return true if topic && Post.where(topic_id: topic.id, post_number: 1).first&.raw_mentions&.include?(user.username_lower)
 
     # topic participants can see all
     return true if SiteSetting.private_replies_participants_can_see_all && topic && Post.where(topic_id: topic.id, user_id: user.id).count > 0
@@ -51,7 +52,6 @@ module ::DiscoursePrivateReplies
     Group.where("id in (?)", SiteSetting.private_replies_see_all_from_groups.split('|')).each do |g|
       userids += g.users.pluck(:id)
     end
-    userids = userids + [ topic.user.id ] if topic
     userids = userids + [ user.id ] if user && !user.anonymous? # anonymous users don't have the id method
     userids.uniq
   end
@@ -82,7 +82,7 @@ after_initialize do
         return true if DiscoursePrivateReplies.can_see_all_posts?(@user, post.topic)
 
         userids = DiscoursePrivateReplies.can_see_post_if_author_among(@user, post.topic)
-        return false unless userids.include? post.user.id
+        return false unless post.post_number == 1 || userids.include?(post.user.id)
       end
 
       true
@@ -178,7 +178,7 @@ after_initialize do
         @results.posts.delete_if do |post|
           next false unless protected_topics.include? post.topic_id # leave unprotected topics alone
           next false if userids.include? post.user_id               # show staff and own posts
-          next false if post.user_id == post.topic.user_id          # show topic starter posts
+          next false if post.post_number == 1
           next false if @guardian.user&.id == post.topic.user_id    # show all posts to topic owner
           true
         end
@@ -202,7 +202,6 @@ after_initialize do
             builder.where(<<~SQL)
               (a.target_topic_id IS NULL OR
                a.target_topic_id NOT IN (#{protected_topic_list.join(',')}) OR
-               a.acting_user_id = t.user_id OR
                t.user_id = #{viewer_id} OR
                a.acting_user_id IN (#{userid_list}))
             SQL
